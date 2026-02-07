@@ -51,6 +51,16 @@ public class RoomService {
         roomMemberRepository.save(roomMember);
     }
 
+    // 방장만 조작
+    public void validateHost(Long roomId, Long userId){
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(()-> new IllegalArgumentException("존재하지 않는 방입니다."));
+
+        if(!room.getHost().getId().equals(userId)){
+            throw new SecurityException("방장만 이 작업을 수행할 수 있습니다.");
+        }
+    }
+
     // 방 나가기
     @Transactional
     public void leaveRoom(Long roomId, Long userId){
