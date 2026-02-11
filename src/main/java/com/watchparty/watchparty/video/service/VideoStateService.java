@@ -5,6 +5,7 @@ import com.watchparty.watchparty.video.dto.VideoControlRequest;
 import com.watchparty.watchparty.video.dto.VideoStateResponse;
 import com.watchparty.watchparty.video.redis.VideoRedisKeys;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class VideoStateService {
 
     private final StringRedisTemplate redisTemplate;
@@ -28,6 +30,7 @@ public class VideoStateService {
 
         // 아직 영상 설정이 안된 방
         if(data == null || data.isEmpty()){
+            log.debug("Video state empty: roomId={}", roomId);
             return new VideoStateResponse(
                     null,
                     VideoRedisKeys.STATUS_PAUSED,
@@ -47,6 +50,8 @@ public class VideoStateService {
 
         double currentTime = computeCurrentTime(status, baseTime, baseTs);
 
+        log.debug("Video state loaded: roomId={}, status={}, videoId={}, currentTime={}",
+                roomId, status, videoId, currentTime);
         return new VideoStateResponse(
                 videoId,
                 status,
@@ -66,6 +71,8 @@ public class VideoStateService {
             throw new IllegalArgumentException("action은 필수입니다.");
         }
 
+        log.info("Applying control: roomId={}, userId={}, action={}, currentTime={}, videoId={}",
+                roomId, userId, action, req.getCurrentTime(), req.getVideoId());
         switch (action) {
             case CHANGE_VIDEO -> {
                 if (req.getVideoId() == null || req.getVideoId().isBlank()) {

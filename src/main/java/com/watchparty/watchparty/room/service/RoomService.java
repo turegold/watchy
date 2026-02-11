@@ -7,6 +7,7 @@ import com.watchparty.watchparty.room.repository.RoomRepository;
 import com.watchparty.watchparty.user.entity.User;
 import com.watchparty.watchparty.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class RoomService {
 
     private final RoomRepository roomRepository;
@@ -23,6 +25,7 @@ public class RoomService {
 
     // 방 생성
     public Room createRoom(Long hostUserId, String title, boolean isPrivate){
+        log.info("Creating room: hostUserId={}, title={}, isPrivate={}", hostUserId, title, isPrivate);
         User host = userRepository.findById(hostUserId)
                 .orElseThrow(()-> new IllegalArgumentException("존재하지 않는 사용자입니다."));
 
@@ -33,11 +36,13 @@ public class RoomService {
         RoomMember hostMember = new RoomMember(savedRoom, host);
         roomMemberRepository.save(hostMember);
 
+        log.info("Room created: roomId={}, hostUserId={}", savedRoom.getId(), hostUserId);
         return savedRoom;
     }
 
     // 방 참여
     public void joinRoom(Long roomId, Long userId){
+        log.info("Joining room: roomId={}, userId={}", roomId, userId);
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(()-> new IllegalArgumentException("존재하지 않는 방입니다."));
         User user = userRepository.findById(userId)
@@ -49,10 +54,12 @@ public class RoomService {
 
         RoomMember roomMember = new RoomMember(room, user);
         roomMemberRepository.save(roomMember);
+        log.info("Joined room: roomId={}, userId={}", roomId, userId);
     }
 
     // 방장만 조작
     public void validateHost(Long roomId, Long userId){
+        log.debug("Validating host: roomId={}, userId={}", roomId, userId);
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(()-> new IllegalArgumentException("존재하지 않는 방입니다."));
 
@@ -64,6 +71,7 @@ public class RoomService {
     // 방 나가기
     @Transactional
     public void leaveRoom(Long roomId, Long userId){
+        log.info("Leaving room: roomId={}, userId={}", roomId, userId);
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(()-> new IllegalArgumentException("존재하지 않는 방입니다."));
         User user = userRepository.findById(userId)
@@ -78,6 +86,7 @@ public class RoomService {
         // 방에 아무도 없으면 방 삭제
         if(remaining.isEmpty()){
             roomRepository.delete(room);
+            log.info("Room deleted because it became empty: roomId={}", roomId);
             return;
         }
 
@@ -85,12 +94,15 @@ public class RoomService {
         if(room.getHost().equals(user)){
             RoomMember nextHost = remaining.get(0);
             room.changeHost(nextHost.getUser());
+            log.info("Host transferred: roomId={}, newHostUserId={}", roomId, nextHost.getUser().getId());
         }
     }
 
     // 방 목록 조회
     @Transactional(readOnly = true)
     public List<Room> getRooms(){
-        return roomRepository.findAll();
+        List<Room> rooms = roomRepository.findAll();
+        log.debug("Rooms fetched: count={}", rooms.size());
+        return rooms;
     }
 }
