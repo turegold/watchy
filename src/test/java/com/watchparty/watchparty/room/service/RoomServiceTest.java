@@ -38,7 +38,7 @@ class RoomServiceTest {
     @Test
     void 방_생성_성공() {
         //given
-        User host = new User("test@test.com", "pw");
+        User host = new User("test@test.com");
         Room room = new Room("테스트 방", host, false);
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(host));
@@ -56,8 +56,8 @@ class RoomServiceTest {
     @Test
     void 방_참여_성공() {
         //given
-        User host = new User("host@test.com", "pw");
-        User user = new User("user@test.com", "pw");
+        User host = new User("host@test.com");
+        User user = new User("user@test.com");
         Room room = new Room("방", host, false);
 
         when(roomRepository.findById(1L)).thenReturn(Optional.of(room));
@@ -74,7 +74,7 @@ class RoomServiceTest {
     @Test
     void 이미_참여한_유저는_예외() {
         // given
-        User user = new User("user@test.com", "pw");
+        User user = new User("user@test.com");
         Room room = new Room("방", user, false);
 
         when(roomRepository.findById(1L)).thenReturn(Optional.of(room));
@@ -89,8 +89,8 @@ class RoomServiceTest {
     @Test
     void 방장이_나가면_방장_위임() {
         // given
-        User host = new User("host@test.com", "pw");
-        User next = new User("next@test.com", "pw");
+        User host = new User("host@test.com");
+        User next = new User("next@test.com");
         Room room = new Room("방", host, false);
 
         RoomMember hostMember = new RoomMember(room, host);
@@ -113,7 +113,7 @@ class RoomServiceTest {
     @Test
     void 마지막_유저가_나가면_방_삭제() {
         // given
-        User host = new User("host@test.com", "pw");
+        User host = new User("host@test.com");
         Room room = new Room("방", host, false);
         RoomMember member = new RoomMember(room, host);
 

@@ -1,5 +1,7 @@
 package com.watchparty.watchparty.video.service;
 
+import com.watchparty.watchparty.common.exception.AppException;
+import com.watchparty.watchparty.common.exception.ErrorCode;
 import com.watchparty.watchparty.video.dto.VideoActionType;
 import com.watchparty.watchparty.video.dto.VideoControlRequest;
 import com.watchparty.watchparty.video.dto.VideoStateResponse;
@@ -12,7 +14,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -20,16 +21,15 @@ public class VideoStateService {
 
     private final StringRedisTemplate redisTemplate;
 
-    private HashOperations<String, String, String> ops(){
+    private HashOperations<String, String, String> ops() {
         return redisTemplate.opsForHash();
     }
 
-    public VideoStateResponse getState(Long roomId){
+    public VideoStateResponse getState(Long roomId) {
         String key = VideoRedisKeys.videoKey(roomId);
         Map<String, String> data = ops().entries(key);
 
-        // 아직 영상 설정이 안된 방
-        if(data == null || data.isEmpty()){
+        if (data == null || data.isEmpty()) {
             log.debug("Video state empty: roomId={}", roomId);
             return new VideoStateResponse(
                     null,
@@ -68,15 +68,16 @@ public class VideoStateService {
 
         VideoActionType action = req.getAction();
         if (action == null) {
-            throw new IllegalArgumentException("action은 필수입니다.");
+            throw new AppException(ErrorCode.BAD_REQUEST, "action은 필수입니다.");
         }
 
         log.info("Applying control: roomId={}, userId={}, action={}, currentTime={}, videoId={}",
                 roomId, userId, action, req.getCurrentTime(), req.getVideoId());
+
         switch (action) {
             case CHANGE_VIDEO -> {
                 if (req.getVideoId() == null || req.getVideoId().isBlank()) {
-                    throw new IllegalArgumentException("CHANGE_VIDEO에는 videoId가 필요합니다.");
+                    throw new AppException(ErrorCode.BAD_REQUEST, "CHANGE_VIDEO에는 videoId가 필요합니다.");
                 }
                 ops().put(key, VideoRedisKeys.F_VIDEO_ID, req.getVideoId());
                 ops().put(key, VideoRedisKeys.F_STATUS, VideoRedisKeys.STATUS_PAUSED);
@@ -84,7 +85,6 @@ public class VideoStateService {
                 ops().put(key, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
                 ops().put(key, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
             }
-
             case PLAY -> {
                 double t = requireTime(req);
                 ops().put(key, VideoRedisKeys.F_STATUS, VideoRedisKeys.STATUS_PLAYING);
@@ -92,7 +92,6 @@ public class VideoStateService {
                 ops().put(key, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
                 ops().put(key, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
             }
-
             case PAUSE -> {
                 double t = requireTime(req);
                 ops().put(key, VideoRedisKeys.F_STATUS, VideoRedisKeys.STATUS_PAUSED);
@@ -100,10 +99,8 @@ public class VideoStateService {
                 ops().put(key, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
                 ops().put(key, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
             }
-
             case SEEK -> {
                 double t = requireTime(req);
-                // status는 유지 (PLAYING이면 seek 후에도 계속 재생, PAUSED면 정지 상태 유지)
                 ops().put(key, VideoRedisKeys.F_BASE_TIME, String.valueOf(t));
                 ops().put(key, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
                 ops().put(key, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
@@ -119,29 +116,37 @@ public class VideoStateService {
         double elapsedSec = (now - baseTs) / 1000.0;
         double t = baseTime + elapsedSec;
 
-        // 음수 방지
         return Math.max(0.0, t);
     }
 
     private double requireTime(VideoControlRequest req) {
         if (req.getCurrentTime() == null) {
-            throw new IllegalArgumentException(req.getAction() + "에는 currentTime이 필요합니다.");
+            throw new AppException(ErrorCode.BAD_REQUEST, req.getAction() + "에는 currentTime이 필요합니다.");
         }
         return req.getCurrentTime();
     }
 
     private double parseDouble(String v, double def) {
-        try { return v == null ? def : Double.parseDouble(v); }
-        catch (Exception e) { return def; }
+        try {
+            return v == null ? def : Double.parseDouble(v);
+        } catch (Exception e) {
+            return def;
+        }
     }
 
     private long parseLong(String v, long def) {
-        try { return v == null ? def : Long.parseLong(v); }
-        catch (Exception e) { return def; }
+        try {
+            return v == null ? def : Long.parseLong(v);
+        } catch (Exception e) {
+            return def;
+        }
     }
 
     private Long parseLongObj(String v) {
-        try { return v == null ? null : Long.parseLong(v); }
-        catch (Exception e) { return null; }
+        try {
+            return v == null ? null : Long.parseLong(v);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

@@ -21,20 +21,15 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 100)
+    @Column(unique = true)
     private String email;
-
-    @Column(nullable = false)
-    private String password;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     // 생성자
-    public User(String email, String password) {
+    public User(String email) {
         this.email = email;
-        this.password = password;
         this.createdAt = LocalDateTime.now();
     }
-
 }
