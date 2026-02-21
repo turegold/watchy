@@ -32,4 +32,12 @@ public class User {
         this.email = email;
         this.createdAt = LocalDateTime.now();
     }
+
+    // DB 조회 없이 id만 가진 참조 객체 생성
+    // (FK 저장 시 select 방지 목적)
+    public static User referenceById(Long id){
+        User user = new User();
+        user.id = id;
+        return user;
+    }
 }

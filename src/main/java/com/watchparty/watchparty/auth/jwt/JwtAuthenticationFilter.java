@@ -1,6 +1,7 @@
 package com.watchparty.watchparty.auth.jwt;
 
 import com.watchparty.watchparty.common.exception.AppException;
+import com.watchparty.watchparty.common.exception.ErrorCode;
 import com.watchparty.watchparty.common.security.JwtAuthenticationEntryPoint;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -34,8 +35,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (token != null) {
             try {
-                Long userId = jwtProvider.getUserIdOrThrow(token);
+                // Access Token 검증
+                JwtProvider.TokenValidationResult result = jwtProvider.validateAccessToken(token);
 
+                if (result == JwtProvider.TokenValidationResult.EXPIRED) {
+                    throw new AppException(ErrorCode.EXPIRED_TOKEN);
+                }
+                if (result == JwtProvider.TokenValidationResult.INVALID) {
+                    throw new AppException(ErrorCode.INVALID_TOKEN);
+                }
+
+                // userId 추출
+                Long userId = jwtProvider.getUserIdFromAccessToken(token)
+                        .orElseThrow(()-> new AppException(ErrorCode.INVALID_TOKEN));
+
+                // 인증 객체 세팅
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
                                 userId,
