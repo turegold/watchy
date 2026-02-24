@@ -4,6 +4,7 @@ import com.watchparty.watchparty.common.exception.AppException;
 import com.watchparty.watchparty.common.exception.ErrorCode;
 import com.watchparty.watchparty.common.response.ApiResponse;
 import com.watchparty.watchparty.room.dto.CreateRoomRequest;
+import com.watchparty.watchparty.room.dto.RoomListItemResponse;
 import com.watchparty.watchparty.room.dto.RoomResponse;
 import com.watchparty.watchparty.room.entity.Room;
 import com.watchparty.watchparty.room.service.RoomService;
@@ -44,8 +45,9 @@ public class RoomController {
     @PostMapping("/{roomId}/join")
     public ResponseEntity<ApiResponse<Void>> joinRoom(
             @PathVariable Long roomId,
-            @RequestParam Long userId
+            Authentication authentication
     ) {
+        Long userId = extractUserId(authentication);
         log.info("Join room requested: roomId={}, userId={}", roomId, userId);
         roomService.joinRoom(roomId, userId);
         log.info("Join room completed: roomId={}, userId={}", roomId, userId);
@@ -56,8 +58,9 @@ public class RoomController {
     @PostMapping("/{roomId}/leave")
     public ResponseEntity<ApiResponse<Void>> leaveRoom(
             @PathVariable Long roomId,
-            @RequestParam Long userId
+            Authentication authentication
     ) {
+        Long userId = extractUserId(authentication);
         log.info("Leave room requested: roomId={}, userId={}", roomId, userId);
         roomService.leaveRoom(roomId, userId);
         log.info("Leave room completed: roomId={}, userId={}", roomId, userId);
@@ -66,11 +69,9 @@ public class RoomController {
 
     // 방 목록 조회
     @GetMapping
-    public ResponseEntity<ApiResponse<List<RoomResponse>>> getRooms() {
+    public ResponseEntity<ApiResponse<List<RoomListItemResponse>>> getRooms() {
         log.info("Get rooms requested");
-        List<RoomResponse> response = roomService.getRooms().stream()
-                .map(RoomResponse::new)
-                .toList();
+        List<RoomListItemResponse> response = roomService.getRooms();
 
         log.info("Get rooms completed: count={}", response.size());
         return ResponseEntity.ok(ApiResponse.ok("방 목록 조회에 성공했습니다.", response));

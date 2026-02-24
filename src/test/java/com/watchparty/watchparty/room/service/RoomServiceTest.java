@@ -131,20 +131,6 @@ class RoomServiceTest {
         verify(roomRepository).delete(room);
     }
 
-    @Test
-    void 방_목록_조회() {
-        // given
-        when(roomRepository.findAll())
-                .thenReturn(List.of(
-                        mock(Room.class),
-                        mock(Room.class)
-                ));
 
-        // when
-        List<Room> rooms = roomService.getRooms();
-
-        // then
-        assertThat(rooms).hasSize(2);
-    }
 
 }

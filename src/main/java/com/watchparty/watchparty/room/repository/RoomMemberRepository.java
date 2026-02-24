@@ -18,4 +18,10 @@ public interface RoomMemberRepository extends JpaRepository<RoomMember, Long> {
 
     // 방 참여 여부만 빠르게 확인
     boolean existsByRoomAndUser(Room room, User user);
+
+    // 방 참여자 수 세기
+    long countByRoom(Room room);
+
+    // 방장 후보 찾기
+    Optional<RoomMember> findTopByRoomOrderByJoinedAtAsc(Room room);
 }

@@ -2,12 +2,16 @@ package com.watchparty.watchparty.room.service;
 
 import com.watchparty.watchparty.common.exception.AppException;
 import com.watchparty.watchparty.common.exception.ErrorCode;
+import com.watchparty.watchparty.room.dto.RoomListItemResponse;
 import com.watchparty.watchparty.room.entity.Room;
 import com.watchparty.watchparty.room.entity.RoomMember;
 import com.watchparty.watchparty.room.repository.RoomMemberRepository;
+import com.watchparty.watchparty.room.repository.RoomParticipantRedisRepository;
 import com.watchparty.watchparty.room.repository.RoomRepository;
 import com.watchparty.watchparty.user.entity.User;
 import com.watchparty.watchparty.user.repository.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,7 +28,9 @@ public class RoomService {
     private final RoomRepository roomRepository;
     private final RoomMemberRepository roomMemberRepository;
     private final UserRepository userRepository;
+    private final EntityManager entityManager;
 
+    // 방 생성
     public Room createRoom(Long hostUserId, String title, boolean isPrivate) {
         log.info("Creating room: hostUserId={}, title={}, isPrivate={}", hostUserId, title, isPrivate);
 
@@ -41,6 +47,7 @@ public class RoomService {
         return savedRoom;
     }
 
+    // 방 참여
     public void joinRoom(Long roomId, Long userId) {
         log.info("Joining room: roomId={}, userId={}", roomId, userId);
 
@@ -55,9 +62,11 @@ public class RoomService {
 
         RoomMember roomMember = new RoomMember(room, user);
         roomMemberRepository.save(roomMember);
+
         log.info("Joined room: roomId={}, userId={}", roomId, userId);
     }
 
+    // 방장 검증
     public void validateHost(Long roomId, Long userId) {
         log.debug("Validating host: roomId={}, userId={}", roomId, userId);
 
@@ -69,36 +78,53 @@ public class RoomService {
         }
     }
 
+    // 방 나가기
     public void leaveRoom(Long roomId, Long userId) {
         log.info("Leaving room: roomId={}, userId={}", roomId, userId);
 
-        Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
+        // Room row 락 (leave 동시에 들어와도 한 번에 하나씩 처리되게)
+        Room room = entityManager.find(Room.class, roomId, LockModeType.PESSIMISTIC_WRITE);
+        if (room == null) {
+            throw new AppException(ErrorCode.ROOM_NOT_FOUND);
+        }
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
         RoomMember member = roomMemberRepository.findByRoomAndUser(room, user)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_ROOM_MEMBER));
 
-        roomMemberRepository.delete(member);
-        List<RoomMember> remaining = roomMemberRepository.findByRoom(room);
+        boolean leavingHost = room.getHost() != null && room.getHost().getId().equals(userId);
 
-        if (remaining.isEmpty()) {
+        // RoomMember 삭제
+        roomMemberRepository.delete(member);
+
+        // 남은 인원 수 확인
+        long remainingCount = roomMemberRepository.countByRoom(room);
+
+        // 0명이면 방 삭제
+        if (remainingCount == 0L) {
             roomRepository.delete(room);
             log.info("Room deleted because it became empty: roomId={}", roomId);
             return;
         }
 
-        if (room.getHost().equals(user)) {
-            RoomMember nextHost = remaining.get(0);
-            room.changeHost(nextHost.getUser());
-            log.info("Host transferred: roomId={}, newHostUserId={}", roomId, nextHost.getUser().getId());
+        // 방장이 나갔으면 방장 위임
+        if (leavingHost) {
+            RoomMember nextHostMember = roomMemberRepository
+                    .findTopByRoomOrderByJoinedAtAsc(room)
+                    .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "다음 방장 후보를 찾지 못했습니다."));
+
+            room.changeHost(nextHostMember.getUser());
+
+            log.info("Host transferred: roomId={}, newHostUserId={}", roomId, nextHostMember.getUser().getId());
         }
+
+        log.info("Leave room completed: roomId={}, userId={}, remaining={}", roomId, userId, remainingCount);
     }
 
     @Transactional(readOnly = true)
-    public List<Room> getRooms() {
-        List<Room> rooms = roomRepository.findAll();
-        log.debug("Rooms fetched: count={}", rooms.size());
-        return rooms;
+    public List<RoomListItemResponse> getRooms() {
+        return roomRepository.findRoomsWithParticipantCount();
     }
 }
