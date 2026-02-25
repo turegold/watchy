@@ -73,7 +73,6 @@ public class RoomController {
         log.info("Get rooms requested");
         List<RoomListItemResponse> response = roomService.getRooms();
 
-        log.info("Get rooms completed: count={}", response.size());
         return ResponseEntity.ok(ApiResponse.ok("방 목록 조회에 성공했습니다.", response));
     }
 

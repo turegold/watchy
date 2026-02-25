@@ -1,5 +1,6 @@
 package com.watchparty.watchparty.room.service;
 
+import com.watchparty.watchparty.chat.listener.RoomSystemMessageListener;
 import com.watchparty.watchparty.common.exception.AppException;
 import com.watchparty.watchparty.common.exception.ErrorCode;
 import com.watchparty.watchparty.room.dto.RoomListItemResponse;
@@ -10,10 +11,12 @@ import com.watchparty.watchparty.room.repository.RoomParticipantRedisRepository;
 import com.watchparty.watchparty.room.repository.RoomRepository;
 import com.watchparty.watchparty.user.entity.User;
 import com.watchparty.watchparty.user.repository.UserRepository;
+import com.watchparty.watchparty.video.service.VideoStateService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +32,8 @@ public class RoomService {
     private final RoomMemberRepository roomMemberRepository;
     private final UserRepository userRepository;
     private final EntityManager entityManager;
+    private final ApplicationEventPublisher eventPublisher;
+    private final VideoStateService videoStateService;
 
     // 방 생성
     public Room createRoom(Long hostUserId, String title, boolean isPrivate) {
@@ -62,6 +67,11 @@ public class RoomService {
 
         RoomMember roomMember = new RoomMember(room, user);
         roomMemberRepository.save(roomMember);
+
+        // 시스템 메시지 전송
+        eventPublisher.publishEvent(
+                new RoomSystemMessageListener.RoomJoinedEvent(roomId, userId)
+        );
 
         log.info("Joined room: roomId={}, userId={}", roomId, userId);
     }
@@ -99,11 +109,19 @@ public class RoomService {
         // RoomMember 삭제
         roomMemberRepository.delete(member);
 
+        // 시스템 메시지 전송
+        eventPublisher.publishEvent(
+                new RoomSystemMessageListener.RoomLeftEvent(roomId, userId)
+        );
+
         // 남은 인원 수 확인
         long remainingCount = roomMemberRepository.countByRoom(room);
 
         // 0명이면 방 삭제
         if (remainingCount == 0L) {
+            // redis에서 삭제
+            videoStateService.deleteState(roomId);
+            // DB에서 삭제
             roomRepository.delete(room);
             log.info("Room deleted because it became empty: roomId={}", roomId);
             return;
@@ -111,11 +129,18 @@ public class RoomService {
 
         // 방장이 나갔으면 방장 위임
         if (leavingHost) {
+            Long oldHostId = userId;
             RoomMember nextHostMember = roomMemberRepository
                     .findTopByRoomOrderByJoinedAtAsc(room)
                     .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR, "다음 방장 후보를 찾지 못했습니다."));
 
+            Long newHostId = nextHostMember.getUser().getId();
             room.changeHost(nextHostMember.getUser());
+
+            // 시스템 메시지 전송
+            eventPublisher.publishEvent(
+                    new RoomSystemMessageListener.HostChangedEvent(roomId, oldHostId, newHostId)
+            );
 
             log.info("Host transferred: roomId={}, newHostUserId={}", roomId, nextHostMember.getUser().getId());
         }

@@ -10,17 +10,20 @@ public class RoomListItemResponse {
     private final boolean isPrivate;
 
     private final Long hostUserId;
+    private final String hostNickName;
     private final long participantCount;
 
     public RoomListItemResponse(Long roomId,
                                 String title,
                                 boolean isPrivate,
                                 Long hostUserId,
+                                String hostNickName,
                                 long participantCount) {
         this.roomId = roomId;
         this.title = title;
         this.isPrivate = isPrivate;
         this.hostUserId = hostUserId;
+        this.hostNickName = hostNickName;
         this.participantCount = participantCount;
     }
 }

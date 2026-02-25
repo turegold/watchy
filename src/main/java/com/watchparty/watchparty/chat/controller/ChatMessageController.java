@@ -2,12 +2,14 @@ package com.watchparty.watchparty.chat.controller;
 
 
 
+import com.watchparty.watchparty.chat.dto.ChatEventResponse;
 import com.watchparty.watchparty.chat.dto.ChatMessageResponse;
 import com.watchparty.watchparty.chat.dto.ChatSendRequest;
 import com.watchparty.watchparty.chat.service.ChatService;
 import com.watchparty.watchparty.common.exception.AppException;
 import com.watchparty.watchparty.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
@@ -17,6 +19,7 @@ import java.security.Principal;
 
 // STOMP 채팅 컨트롤러
 
+@Slf4j
 @Controller
 @RequiredArgsConstructor
 public class ChatMessageController {
@@ -33,10 +36,15 @@ public class ChatMessageController {
             ChatSendRequest request,
             Principal principal
     ){
+        log.info("[chat] recv roomId={}, principal={}, msg={}",
+                roomId,
+                principal == null ? "null" : principal.getName(),
+                request == null ? "null" : request.getMessage());
+
         Long userId = extractUserId(principal);
 
         // nickname 포함해서 payload 완성
-        ChatMessageResponse payload = chatService.buildChatMessage(roomId, userId, request.getMessage());
+        ChatEventResponse payload = chatService.buildChatMessage(roomId, userId, request.getMessage());
 
         // 구독자에게 브로드캐스트
         messagingTemplate.convertAndSend(CHAT_TOPIC_PREFIX + roomId + "/chat", payload);

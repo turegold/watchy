@@ -25,6 +25,7 @@ public class VideoStateService {
         return redisTemplate.opsForHash();
     }
 
+    // 방 상태 조회
     public VideoStateResponse getState(Long roomId) {
         String key = VideoRedisKeys.videoKey(roomId);
         Map<String, String> data = ops().entries(key);
@@ -62,6 +63,7 @@ public class VideoStateService {
         );
     }
 
+    // 방 상태 적용
     public void applyControl(Long roomId, Long userId, VideoControlRequest req) {
         String key = VideoRedisKeys.videoKey(roomId);
         long nowMs = System.currentTimeMillis();
@@ -108,6 +110,14 @@ public class VideoStateService {
         }
     }
 
+    // 영상 삭제
+    public void deleteState(Long roomId){
+        String key = VideoRedisKeys.videoKey(roomId);
+        Boolean deleted = redisTemplate.delete(key);
+        log.info("Video state redis key deleted: roomId={}, key={}, deleted={}", roomId, key, deleted);
+    }
+
+    // 시간 계산
     private double computeCurrentTime(String status, double baseTime, long baseTs) {
         if (!VideoRedisKeys.STATUS_PLAYING.equals(status)) return baseTime;
         if (baseTs <= 0) return baseTime;

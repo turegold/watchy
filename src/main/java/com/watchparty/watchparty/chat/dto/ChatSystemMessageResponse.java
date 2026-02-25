@@ -19,4 +19,5 @@ public class ChatSystemMessageResponse {
 
     // 이벤트 발생 시간
     private LocalDateTime createdAt;
+
 }
