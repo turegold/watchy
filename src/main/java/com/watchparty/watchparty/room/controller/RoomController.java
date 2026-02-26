@@ -103,3 +103,4 @@ public class RoomController {
         throw new AppException(ErrorCode.UNAUTHORIZED);
     }
 }
+
