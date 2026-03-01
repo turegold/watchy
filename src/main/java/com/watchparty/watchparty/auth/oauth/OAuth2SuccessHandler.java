@@ -40,7 +40,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private final AuthTokenService authTokenService;
     private final ObjectMapper objectMapper;
 
-    @Value("${FRONTEND_BASE_URL}")
+    @Value("${app.frontend-base-url}")
     private String frontendBaseUrl;
 
     @Override
