@@ -29,7 +29,7 @@ https://watchy.site
 
 ### 🔐 OAuth 로그인
 
-- 카카오 OAuth2 로그인 지원
+- 카카오, 구글 OAuth2 로그인 지원
 - JWT 기반 인증
 
 ### 🏠 Watch Party 방 생성
