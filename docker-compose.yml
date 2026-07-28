@@ -1,27 +1,6 @@
 version: "3.9"
 
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: watchparty-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      TZ: ${TZ}
-    ports:
-      - "${MYSQL_PORT:-3306}:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    command: >
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
   redis:
     image: redis:7-alpine
     container_name: watchparty-redis
@@ -37,28 +16,6 @@ services:
       timeout: 3s
       retries: 20
 
-  adminer:
-    image: adminer:latest
-    container_name: watchparty-adminer
-    restart: unless-stopped
-    depends_on:
-      mysql:
-        condition: service_healthy
-    ports:
-      - "${ADMINER_PORT:-8081}:8080"
-
-  redisinsight:
-    image: redis/redisinsight:latest
-    container_name: watchparty-redisinsight
-    restart: unless-stopped
-    depends_on:
-      redis:
-        condition: service_healthy
-    ports:
-      - "${REDISINSIGHT_PORT:-5540}:5540"
-    volumes:
-      - redisinsight_data:/data
-
   api:
     build:
       context: .
@@ -68,14 +25,10 @@ services:
     env_file:
       - .env
     depends_on:
-      mysql:
-        condition: service_healthy
       redis:
         condition: service_healthy
     ports:
       - "${SPRING_PORT:-8080}:8080"
 
 volumes:
-  mysql_data:
   redis_data:
-  redisinsight_data:
