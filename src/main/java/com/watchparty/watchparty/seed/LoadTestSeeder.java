@@ -51,34 +51,45 @@ public class LoadTestSeeder implements ApplicationRunner {
     @Value("${seed.user-count:600}")
     private int userCount;
 
+    @Value("${seed.room-count:1}")
+    private int roomCount;
+
     @Value("${seed.token-file:tokens.json}")
     private String tokenFile;
 
+    @Value("${seed.room-file:rooms.json}")
+    private String roomFile;
+
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        log.info("=== [SEED] 시작: 부하 유저 {}명 ===", userCount);
+        log.info("=== [SEED] 시작: 방 {}개 / 부하 유저 {}명 ===", roomCount, userCount);
 
-        // 1) 상주 호스트 + 부하테스트 방
+        // 1) 상주 호스트 + 부하테스트 방 roomCount개 (호스트가 상주해 방 자동삭제 방지)
+        //    roomCount=1이면 단일 방(락 경합), 다수면 방 분산(락 경합 완화) 테스트
         User host = getOrCreateUser("loadtest-host@watchy.test", "부하호스트");
-        Room room = roomService.createRoom(host.getId(), "부하테스트방", false);
-        Long roomId = room.getId();
+        List<Long> roomIds = new ArrayList<>(roomCount);
+        for (int i = 1; i <= roomCount; i++) {
+            Room room = roomService.createRoom(host.getId(), "부하테스트방" + i, false);
+            roomIds.add(room.getId());
+        }
 
         // 2) 부하 유저 + 토큰 발급
         List<String> bearerTokens = new ArrayList<>(userCount);
         for (int i = 1; i <= userCount; i++) {
             User user = getOrCreateUser("loadtest" + i + "@watchy.test", "부하유저" + i);
-            String token = jwtProvider.createAccessToken(user.getId());
-            bearerTokens.add("Bearer " + token);
+            bearerTokens.add("Bearer " + jwtProvider.createAccessToken(user.getId()));
         }
 
-        // 3) tokens.json 저장
-        Path out = Path.of(tokenFile).toAbsolutePath();
-        objectMapper.writeValue(out.toFile(), bearerTokens);
+        // 3) tokens.json / rooms.json 저장
+        Path tokenOut = Path.of(tokenFile).toAbsolutePath();
+        Path roomOut = Path.of(roomFile).toAbsolutePath();
+        objectMapper.writeValue(tokenOut.toFile(), bearerTokens);
+        objectMapper.writeValue(roomOut.toFile(), roomIds);
 
         log.info("=== [SEED] 완료 ===");
-        log.info("ROOM_ID = {}", roomId);
-        log.info("tokens  = {}개 → {}", bearerTokens.size(), out);
-        log.info("k6 예:  BASE_URL=https://api.watchy.site ROOM_ID={} k6 run --summary-export=baseline.json script.js", roomId);
+        log.info("rooms  = {}개 → {} (ID {}~{})", roomIds.size(), roomOut,
+                roomIds.get(0), roomIds.get(roomIds.size() - 1));
+        log.info("tokens = {}개 → {}", bearerTokens.size(), tokenOut);
 
         // one-shot: 시딩만 하고 종료
         int code = SpringApplication.exit(applicationContext, () -> 0);
