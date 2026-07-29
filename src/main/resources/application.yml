@@ -10,6 +10,9 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 기본 10. 부하테스트 시 DB_POOL_SIZE로 조절 (RDS max_connections=60 미만 유지)
+      maximum-pool-size: ${DB_POOL_SIZE:10}
 
   data:
     redis:
