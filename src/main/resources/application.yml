@@ -1,5 +1,10 @@
 server:
   forward-headers-strategy: framework
+  tomcat:
+    threads:
+      # 기본 200. 부하테스트 시 TOMCAT_MAX_THREADS로 조절.
+      # ⚠️ 스레드당 스택 ~1MB. EC2 메모리 여유 적고 스왑 0이라 과도하게 올리면 OOM 위험.
+      max: ${TOMCAT_MAX_THREADS:200}
 
 spring:
   application:
