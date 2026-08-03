@@ -71,3 +71,12 @@ jwt:
 
 app:
   frontend-base-url: ${FRONTEND_BASE_URL}
+
+aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  credentials:
+    access-key: ${AWS_ACCESS_KEY}
+    secret-key: ${AWS_SECRET_KEY}
+  s3:
+    bucket: ${AWS_S3_BUCKET}
+    presign-expiration-seconds: 300   # presigned URL 유효시간(초)

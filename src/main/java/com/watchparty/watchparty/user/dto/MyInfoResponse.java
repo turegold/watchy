@@ -11,4 +11,5 @@ public class MyInfoResponse {
     private String nickname;
     private Integer level;
     private Long exp;
+    private String profileImageUrl;  // presigned GET URL. 이미지 없으면 null
 }

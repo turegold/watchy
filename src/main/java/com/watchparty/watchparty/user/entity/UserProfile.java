@@ -24,6 +24,10 @@ public class UserProfile {
     @Column(nullable = false, length = 50)
     private String nickname;
 
+    // S3 객체 key (프로필 이미지). null이면 기본 이미지 사용
+    @Column(length = 255)
+    private String profileImageKey;
+
     @Column(nullable = false)
     private int level;
 
@@ -52,5 +56,12 @@ public class UserProfile {
 
     public void updateNickname(String nickname){
         this.nickname = nickname;
+    }
+
+    // 프로필 이미지 key 갱신. 이전 key를 반환(호출부에서 S3 삭제에 사용)
+    public String updateProfileImageKey(String newKey){
+        String previousKey = this.profileImageKey;
+        this.profileImageKey = newKey;
+        return previousKey;
     }
 }
