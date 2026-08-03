@@ -37,6 +37,10 @@ public enum ErrorCode {
     OAUTH_PROVIDER_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "지원하지 않는 OAuth 제공자입니다."),
     OAUTH_EMAIL_NOT_PROVIDED(HttpStatus.BAD_REQUEST, "OAuth 제공자로부터 이메일을 받지 못했습니다."),
 
+    // File / Storage
+    INVALID_IMAGE_TYPE(HttpStatus.BAD_REQUEST, "이미지 파일만 업로드할 수 있습니다."),
+    INVALID_IMAGE_KEY(HttpStatus.BAD_REQUEST, "유효하지 않은 이미지 key입니다."),
+
     // Common
     BAD_REQUEST(HttpStatus.BAD_REQUEST, "잘못된 요청입니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다.");
