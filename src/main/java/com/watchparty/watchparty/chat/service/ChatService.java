@@ -4,6 +4,7 @@ import com.watchparty.watchparty.chat.dto.ChatEventResponse;
 import com.watchparty.watchparty.chat.dto.ChatMessageResponse;
 import com.watchparty.watchparty.common.exception.AppException;
 import com.watchparty.watchparty.common.exception.ErrorCode;
+import com.watchparty.watchparty.common.storage.S3StorageService;
 import com.watchparty.watchparty.user.repository.UserProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,7 @@ import java.time.LocalDateTime;
 public class ChatService {
 
     private final UserProfileRepository userProfileRepository;
+    private final S3StorageService s3StorageService;
 
     // ChatMessageResponse를 만들어 반환
     @Transactional(readOnly = true)
@@ -38,12 +40,19 @@ public class ChatService {
         String nickname = userProfileRepository.findNicknameByUserId(userId)
                 .orElse("Unkown");
 
+        // 프로필 이미지(있으면 presigned GET URL, 없으면 null)
+        String profileImageUrl = userProfileRepository.findProfileImageKeyByUserId(userId)
+                .filter(key -> !key.isBlank())
+                .map(s3StorageService::createPresignedGetUrl)
+                .orElse(null);
+
         log.debug("[chat] build done nickname={}, trimmedLen={}", nickname, trimmed.length());
 
         ChatMessageResponse chat =  ChatMessageResponse.builder()
                 .roomId(roomId)
                 .sendUserId(userId)
                 .nickname(nickname)
+                .profileImageUrl(profileImageUrl)
                 .message(trimmed)
                 .createdAt(LocalDateTime.now())
                 .build();

@@ -110,6 +110,11 @@ public class VideoStateService {
         }
     }
 
+    // videoId만 가볍게 조회 (방 목록 썸네일용). 없으면 null
+    public String getVideoId(Long roomId) {
+        return ops().get(VideoRedisKeys.videoKey(roomId), VideoRedisKeys.F_VIDEO_ID);
+    }
+
     // 영상 삭제
     public void deleteState(Long roomId){
         String key = VideoRedisKeys.videoKey(roomId);

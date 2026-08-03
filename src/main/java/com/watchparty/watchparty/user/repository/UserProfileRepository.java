@@ -17,4 +17,8 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, Long> 
     // userId로만 닉네임 뽑기
     @Query("select up.nickname from UserProfile up where up.user.id = :userId")
     Optional<String> findNicknameByUserId(Long userId);
+
+    // userId로 프로필 이미지 key 뽑기 (없거나 null이면 empty)
+    @Query("select up.profileImageKey from UserProfile up where up.user.id = :userId")
+    Optional<String> findProfileImageKeyByUserId(Long userId);
 }
