@@ -150,6 +150,9 @@ public class RoomService {
 
     @Transactional(readOnly = true)
     public List<RoomListItemResponse> getRooms() {
-        return roomRepository.findRoomsWithParticipantCount();
+        // 방 목록(DB) + 각 방의 현재 videoId(Redis)를 합쳐 썸네일에 쓰도록 반환
+        return roomRepository.findRoomsWithParticipantCount().stream()
+                .map(room -> room.withVideoId(videoStateService.getVideoId(room.getRoomId())))
+                .toList();
     }
 }

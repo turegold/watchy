@@ -17,6 +17,9 @@ public class ChatMessageResponse {
     private Long sendUserId;
     private String nickname;
 
+    // 발신자 프로필 이미지 (presigned GET URL). 없으면 null → 클라에서 이니셜 아바타
+    private String profileImageUrl;
+
     // 메시지 내용
     private String message;
 

@@ -13,17 +13,37 @@ public class RoomListItemResponse {
     private final String hostNickName;
     private final long participantCount;
 
+    // 현재 재생 중인 영상 id (Redis). 방 목록 썸네일용. 없으면 null
+    private final String videoId;
+
+    // JPQL projection용 생성자 (videoId는 Redis라 여기선 채우지 않음)
     public RoomListItemResponse(Long roomId,
                                 String title,
                                 boolean isPrivate,
                                 Long hostUserId,
                                 String hostNickName,
                                 long participantCount) {
+        this(roomId, title, isPrivate, hostUserId, hostNickName, participantCount, null);
+    }
+
+    public RoomListItemResponse(Long roomId,
+                                String title,
+                                boolean isPrivate,
+                                Long hostUserId,
+                                String hostNickName,
+                                long participantCount,
+                                String videoId) {
         this.roomId = roomId;
         this.title = title;
         this.isPrivate = isPrivate;
         this.hostUserId = hostUserId;
         this.hostNickName = hostNickName;
         this.participantCount = participantCount;
+        this.videoId = videoId;
+    }
+
+    // videoId를 채운 복사본 반환
+    public RoomListItemResponse withVideoId(String videoId) {
+        return new RoomListItemResponse(roomId, title, isPrivate, hostUserId, hostNickName, participantCount, videoId);
     }
 }
