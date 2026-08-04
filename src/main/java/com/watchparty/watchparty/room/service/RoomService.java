@@ -3,6 +3,7 @@ package com.watchparty.watchparty.room.service;
 import com.watchparty.watchparty.chat.listener.RoomSystemMessageListener;
 import com.watchparty.watchparty.common.exception.AppException;
 import com.watchparty.watchparty.common.exception.ErrorCode;
+import com.watchparty.watchparty.common.storage.S3StorageService;
 import com.watchparty.watchparty.room.dto.RoomListItemResponse;
 import com.watchparty.watchparty.room.entity.Room;
 import com.watchparty.watchparty.room.entity.RoomMember;
@@ -10,6 +11,7 @@ import com.watchparty.watchparty.room.repository.RoomMemberRepository;
 import com.watchparty.watchparty.room.repository.RoomParticipantRedisRepository;
 import com.watchparty.watchparty.room.repository.RoomRepository;
 import com.watchparty.watchparty.user.entity.User;
+import com.watchparty.watchparty.user.repository.UserProfileRepository;
 import com.watchparty.watchparty.user.repository.UserRepository;
 import com.watchparty.watchparty.video.service.VideoStateService;
 import jakarta.persistence.EntityManager;
@@ -31,9 +33,11 @@ public class RoomService {
     private final RoomRepository roomRepository;
     private final RoomMemberRepository roomMemberRepository;
     private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
     private final EntityManager entityManager;
     private final ApplicationEventPublisher eventPublisher;
     private final VideoStateService videoStateService;
+    private final S3StorageService s3StorageService;
 
     // 방 생성
     public Room createRoom(Long hostUserId, String title, boolean isPrivate) {
@@ -150,9 +154,16 @@ public class RoomService {
 
     @Transactional(readOnly = true)
     public List<RoomListItemResponse> getRooms() {
-        // 방 목록(DB) + 각 방의 현재 videoId(Redis)를 합쳐 썸네일에 쓰도록 반환
+        // 방 목록(DB) + 각 방의 현재 videoId(Redis) + 방장 프로필 이미지(S3 presigned)를 합쳐 반환
         return roomRepository.findRoomsWithParticipantCount().stream()
-                .map(room -> room.withVideoId(videoStateService.getVideoId(room.getRoomId())))
+                .map(room -> {
+                    String videoId = videoStateService.getVideoId(room.getRoomId());
+                    String hostImageUrl = userProfileRepository.findProfileImageKeyByUserId(room.getHostUserId())
+                            .filter(key -> !key.isBlank())
+                            .map(s3StorageService::createPresignedGetUrl)
+                            .orElse(null);
+                    return room.withVideoId(videoId).withHostProfileImageUrl(hostImageUrl);
+                })
                 .toList();
     }
 }
