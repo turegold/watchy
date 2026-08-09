@@ -10,8 +10,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -63,8 +66,9 @@ public class VideoStateService {
         );
     }
 
-    // 방 상태 적용
-    public void applyControl(Long roomId, Long userId, VideoControlRequest req) {
+    // 방 상태 적용 (Lua 스크립트로 원자적 CAS: torn read 방지 + 순서 역전 방지)
+    // 반환값: 이 액션이 실제로 반영됐으면 true, 더 최신 액션이 이미 반영돼 있어 무시됐으면 false
+    public boolean applyControl(Long roomId, Long userId, VideoControlRequest req) {
         String key = VideoRedisKeys.videoKey(roomId);
         long nowMs = System.currentTimeMillis();
 
@@ -76,38 +80,97 @@ public class VideoStateService {
         log.info("Applying control: roomId={}, userId={}, action={}, currentTime={}, videoId={}",
                 roomId, userId, action, req.getCurrentTime(), req.getVideoId());
 
+        // 이번 액션으로 반영할 필드들 (field, value, field, value ...)
+        List<String> fields = new ArrayList<>();
         switch (action) {
             case CHANGE_VIDEO -> {
                 if (req.getVideoId() == null || req.getVideoId().isBlank()) {
                     throw new AppException(ErrorCode.BAD_REQUEST, "CHANGE_VIDEO에는 videoId가 필요합니다.");
                 }
-                ops().put(key, VideoRedisKeys.F_VIDEO_ID, req.getVideoId());
-                ops().put(key, VideoRedisKeys.F_STATUS, VideoRedisKeys.STATUS_PAUSED);
-                ops().put(key, VideoRedisKeys.F_BASE_TIME, "0");
-                ops().put(key, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
-                ops().put(key, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
+                addField(fields, VideoRedisKeys.F_VIDEO_ID, req.getVideoId());
+                addField(fields, VideoRedisKeys.F_STATUS, VideoRedisKeys.STATUS_PAUSED);
+                addField(fields, VideoRedisKeys.F_BASE_TIME, "0");
+                addField(fields, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
+                addField(fields, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
             }
             case PLAY -> {
                 double t = requireTime(req);
-                ops().put(key, VideoRedisKeys.F_STATUS, VideoRedisKeys.STATUS_PLAYING);
-                ops().put(key, VideoRedisKeys.F_BASE_TIME, String.valueOf(t));
-                ops().put(key, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
-                ops().put(key, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
+                addField(fields, VideoRedisKeys.F_STATUS, VideoRedisKeys.STATUS_PLAYING);
+                addField(fields, VideoRedisKeys.F_BASE_TIME, String.valueOf(t));
+                addField(fields, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
+                addField(fields, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
             }
             case PAUSE -> {
                 double t = requireTime(req);
-                ops().put(key, VideoRedisKeys.F_STATUS, VideoRedisKeys.STATUS_PAUSED);
-                ops().put(key, VideoRedisKeys.F_BASE_TIME, String.valueOf(t));
-                ops().put(key, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
-                ops().put(key, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
+                addField(fields, VideoRedisKeys.F_STATUS, VideoRedisKeys.STATUS_PAUSED);
+                addField(fields, VideoRedisKeys.F_BASE_TIME, String.valueOf(t));
+                addField(fields, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
+                addField(fields, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
             }
             case SEEK -> {
                 double t = requireTime(req);
-                ops().put(key, VideoRedisKeys.F_BASE_TIME, String.valueOf(t));
-                ops().put(key, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
-                ops().put(key, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
+                addField(fields, VideoRedisKeys.F_BASE_TIME, String.valueOf(t));
+                addField(fields, VideoRedisKeys.F_BASE_TS, String.valueOf(nowMs));
+                addField(fields, VideoRedisKeys.F_UPDATED_BY, String.valueOf(userId));
             }
         }
+
+        long clientActionTime = resolveClientActionTime(req, nowMs);
+
+        List<Object> luaArgs = new ArrayList<>();
+        luaArgs.add(String.valueOf(clientActionTime));
+        luaArgs.addAll(fields);
+
+        Long applied = redisTemplate.execute(COMPARE_AND_SET_SCRIPT, List.of(key), luaArgs.toArray());
+        boolean accepted = applied != null && applied == 1L;
+
+        if (!accepted) {
+            log.warn("Stale video control ignored (더 최신 액션이 이미 반영됨): roomId={}, userId={}, action={}, clientActionTime={}",
+                    roomId, userId, action, clientActionTime);
+        }
+        return accepted;
+    }
+
+    private void addField(List<String> fields, String name, String value) {
+        fields.add(name);
+        fields.add(value);
+    }
+
+    // 클라이언트가 안 보냈으면(구버전 클라이언트 등) 서버 도착 시각으로 degrade — 순서 보장은 못 하지만 기존과 동일하게 동작
+    private long resolveClientActionTime(VideoControlRequest req, long fallbackNowMs) {
+        Long clientTime = req.getClientActionTime();
+        return clientTime != null ? clientTime : fallbackNowMs;
+    }
+
+    // KEYS[1] = video 상태 해시 키
+    // ARGV[1] = 이번 액션의 clientActionTime (버전 비교용)
+    // ARGV[2..] = 반영할 field/value 쌍
+    // 저장된 actionTs보다 크지 않으면(옛날/중복 액션) 아무것도 안 쓰고 0 반환 → torn read도, 순서 역전도 불가능
+    private static final String COMPARE_AND_SET_LUA = """
+            local key = KEYS[1]
+            local incomingTs = tonumber(ARGV[1])
+
+            local storedTsStr = redis.call('HGET', key, 'actionTs')
+            local storedTs = storedTsStr and tonumber(storedTsStr) or nil
+
+            if storedTs ~= nil and incomingTs <= storedTs then
+                return 0
+            end
+
+            local args = {key, 'actionTs', ARGV[1]}
+            for i = 2, #ARGV do
+                args[#args + 1] = ARGV[i]
+            end
+
+            redis.call('HSET', unpack(args))
+            return 1
+            """;
+
+    private static final DefaultRedisScript<Long> COMPARE_AND_SET_SCRIPT = new DefaultRedisScript<>();
+
+    static {
+        COMPARE_AND_SET_SCRIPT.setScriptText(COMPARE_AND_SET_LUA);
+        COMPARE_AND_SET_SCRIPT.setResultType(Long.class);
     }
 
     // videoId만 가볍게 조회 (방 목록 썸네일용). 없으면 null
