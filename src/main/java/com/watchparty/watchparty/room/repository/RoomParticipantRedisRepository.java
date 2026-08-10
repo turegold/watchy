@@ -63,6 +63,15 @@ public class RoomParticipantRedisRepository {
         return size == null ? 0L : size;
     }
 
+    // 특정 유저가 현재 이 방의 참여자인지 (ZSCORE 존재 여부)
+    public boolean isParticipant(Long roomId, Long userId){
+        Objects.requireNonNull(roomId, "roomId must not be null");
+        Objects.requireNonNull(userId, "userId must not be null");
+
+        Double score = redisTemplate.opsForZSet().score(participantsKey(roomId), userId.toString());
+        return score != null;
+    }
+
     // 퇴장 처리 + 다음 방장 후보 계산(Lua)
     // 반환:
     // - remainingCount: 퇴장 반영 후 남은 인원 수
@@ -118,16 +127,18 @@ public class RoomParticipantRedisRepository {
             -- 2) count remaining
             local cnt = redis.call('ZCARD', key)
 
-            -- 3) if empty, return {cnt, nil}
+            -- 3) if empty, return {cnt, ''}
+            -- ⚠️ Lua는 배열 끝의 nil을 잘라내므로 {cnt, nil}이면 1칸짜리로 반환된다.
+            --    Java 쪽이 항상 2칸을 기대하므로 "없음"은 nil이 아니라 빈 문자열로 표현.
             if cnt == 0 then
-              return {cnt, nil}
+              return {cnt, ''}
             end
 
             -- 4) pick earliest joined (lowest score)
             local nextHostArr = redis.call('ZRANGE', key, 0, 0)
 
             if nextHostArr == nil or #nextHostArr == 0 then
-              return {cnt, nil}
+              return {cnt, ''}
             end
 
             return {cnt, nextHostArr[1]}
