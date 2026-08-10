@@ -47,6 +47,12 @@ public class RoomListItemResponse {
         this.hostProfileImageUrl = hostProfileImageUrl;
     }
 
+    // 참여자 수(Redis ZCARD)를 채운 복사본 (나머지 필드 보존)
+    public RoomListItemResponse withParticipantCount(long participantCount) {
+        return new RoomListItemResponse(roomId, title, isPrivate, hostUserId, hostNickName,
+                participantCount, videoId, hostProfileImageUrl);
+    }
+
     // videoId를 채운 복사본 (나머지 필드 보존)
     public RoomListItemResponse withVideoId(String videoId) {
         return new RoomListItemResponse(roomId, title, isPrivate, hostUserId, hostNickName,
