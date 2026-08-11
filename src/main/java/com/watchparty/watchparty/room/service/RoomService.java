@@ -35,7 +35,7 @@ public class RoomService {
     private final VideoStateService videoStateService;
     private final S3StorageService s3StorageService;
 
-    // 참여자(현재 접속) 관리는 DB(RoomMember)에서 Redis로 전환됨.
+    // 참여자(현재 접속) 관리는 DB 기반에서 Redis로 전환됨.
     // - 참여자 목록: RoomParticipantRedisRepository (ZSET, score=입장시각)
     // - 생존 신호  : RoomHeartbeatRedisRepository   (ZSET, score=마지막 하트비트 시각)
     private final RoomParticipantRedisRepository participantRedis;
