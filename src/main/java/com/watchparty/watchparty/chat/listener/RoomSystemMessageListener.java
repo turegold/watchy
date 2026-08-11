@@ -3,17 +3,21 @@ package com.watchparty.watchparty.chat.listener;
 import com.watchparty.watchparty.chat.dto.ChatEventResponse;
 import com.watchparty.watchparty.chat.dto.ChatSystemMessageResponse;
 import com.watchparty.watchparty.chat.dto.SystemMessageType;
+import com.watchparty.watchparty.user.dto.UserNickname;
 import com.watchparty.watchparty.user.repository.UserProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.catalina.startup.HostConfig;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /*
 Room 도메인 이벤트를 받아서,
@@ -40,8 +44,8 @@ public class RoomSystemMessageListener {
     // 방 입장
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onRoomJoined(RoomJoinedEvent event){
-        String nickname = nicknameOf(event.userId());
-        String text = nickname + "님이 입장했습니다.";
+        Map<Long, String> nicknames = nicknamesOf(event.userId());
+        String text = nicknames.getOrDefault(event.userId(), "Unkown") + "님이 입장했습니다.";
 
         broadcastSystem(event.roomId(), SystemMessageType.JOIN, text);
     }
@@ -49,17 +53,18 @@ public class RoomSystemMessageListener {
     // 방 퇴장
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onRoomLeft(RoomLeftEvent event){
-        String nickname = nicknameOf(event.userId());
-        String text = nickname + "님이 퇴장했습니다.";
+        Map<Long, String> nicknames = nicknamesOf(event.userId());
+        String text = nicknames.getOrDefault(event.userId(), "Unkown") + "님이 퇴장했습니다.";
 
         broadcastSystem(event.roomId(), SystemMessageType.LEAVE, text);
     }
 
-    // 방장 변경
+    // 방장 변경 — 예전엔 nicknameOf()를 2번 따로 호출해서 쿼리 2번 나갔음. 한 쿼리로 묶음.
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onHostChanged(HostChangedEvent event){
-        String oldNick = nicknameOf(event.oldHostUserId());
-        String newNick = nicknameOf(event.newHostUserId());
+        Map<Long, String> nicknames = nicknamesOf(event.oldHostUserId(), event.newHostUserId());
+        String oldNick = nicknames.getOrDefault(event.oldHostUserId(), "Unkown");
+        String newNick = nicknames.getOrDefault(event.newHostUserId(), "Unkown");
 
         String text = "방장이 " + oldNick + "님에서 " + newNick + "님으로 변경되었습니다.";
 
@@ -81,10 +86,13 @@ public class RoomSystemMessageListener {
         log.info("[system-chat] roomId={}, type={}, message={}", roomId, type, message);
     }
 
-    private String nicknameOf(Long userId){
-        if(userId == null){
-            return "Unkown";
+    // userId 1~2개를 쿼리 1번으로 조회(방장 변경 이벤트가 old/new 2명을 한 번에 필요로 함)
+    private Map<Long, String> nicknamesOf(Long... userIds){
+        List<Long> ids = Arrays.stream(userIds).filter(Objects::nonNull).distinct().toList();
+        if(ids.isEmpty()){
+            return Map.of();
         }
-        return userProfileRepository.findNicknameByUserId(userId).orElse("Unkown");
+        return userProfileRepository.findNicknamesByUserIds(ids).stream()
+                .collect(Collectors.toMap(UserNickname::userId, UserNickname::nickname));
     }
 }

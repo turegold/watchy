@@ -5,6 +5,7 @@ import com.watchparty.watchparty.chat.dto.ChatMessageResponse;
 import com.watchparty.watchparty.common.exception.AppException;
 import com.watchparty.watchparty.common.exception.ErrorCode;
 import com.watchparty.watchparty.common.storage.S3StorageService;
+import com.watchparty.watchparty.user.dto.UserProfileSummary;
 import com.watchparty.watchparty.user.repository.UserProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,15 +37,17 @@ public class ChatService {
             throw new AppException(ErrorCode.BAD_REQUEST);
         }
 
-        // 닉네임 조회
-        String nickname = userProfileRepository.findNicknameByUserId(userId)
-                .orElse("Unkown");
+        // 닉네임 + 프로필 이미지 key를 한 번에 조회 (예전엔 여기서 쿼리 2번 나갔음)
+        UserProfileSummary summary = userProfileRepository.findSummaryByUserId(userId)
+                .orElse(new UserProfileSummary("Unkown", null));
+
+        String nickname = summary.nickname();
 
         // 프로필 이미지(있으면 presigned GET URL, 없으면 null)
-        String profileImageUrl = userProfileRepository.findProfileImageKeyByUserId(userId)
-                .filter(key -> !key.isBlank())
-                .map(s3StorageService::createPresignedGetUrl)
-                .orElse(null);
+        String profileImageKey = summary.profileImageKey();
+        String profileImageUrl = (profileImageKey == null || profileImageKey.isBlank())
+                ? null
+                : s3StorageService.createPresignedGetUrl(profileImageKey);
 
         log.debug("[chat] build done nickname={}, trimmedLen={}", nickname, trimmed.length());
 
