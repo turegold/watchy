@@ -19,14 +19,16 @@ public class RoomListItemResponse {
     // 방장 프로필 이미지 (presigned GET URL). 없으면 null → 클라에서 이니셜 아바타
     private final String hostProfileImageUrl;
 
-    // JPQL projection용 생성자 (videoId/hostProfileImageUrl은 Redis·S3라 여기선 채우지 않음)
+    // JPQL projection용 생성자. participantCount는 Redis ZCARD라 0 placeholder,
+    // hostProfileImageUrl 자리엔 아직 presign 전 raw S3 key가 들어간다 — 서비스에서 presign해 교체.
     public RoomListItemResponse(Long roomId,
                                 String title,
                                 boolean isPrivate,
                                 Long hostUserId,
                                 String hostNickName,
-                                long participantCount) {
-        this(roomId, title, isPrivate, hostUserId, hostNickName, participantCount, null, null);
+                                long participantCount,
+                                String hostProfileImageKey) {
+        this(roomId, title, isPrivate, hostUserId, hostNickName, participantCount, null, hostProfileImageKey);
     }
 
     public RoomListItemResponse(Long roomId,

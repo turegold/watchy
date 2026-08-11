@@ -10,7 +10,6 @@ import com.watchparty.watchparty.room.repository.RoomHeartbeatRedisRepository;
 import com.watchparty.watchparty.room.repository.RoomParticipantRedisRepository;
 import com.watchparty.watchparty.room.repository.RoomRepository;
 import com.watchparty.watchparty.user.entity.User;
-import com.watchparty.watchparty.user.repository.UserProfileRepository;
 import com.watchparty.watchparty.user.repository.UserRepository;
 import com.watchparty.watchparty.video.service.VideoStateService;
 import jakarta.persistence.EntityManager;
@@ -31,7 +30,6 @@ public class RoomService {
 
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
-    private final UserProfileRepository userProfileRepository;
     private final EntityManager entityManager;
     private final ApplicationEventPublisher eventPublisher;
     private final VideoStateService videoStateService;
@@ -187,15 +185,16 @@ public class RoomService {
 
     @Transactional(readOnly = true)
     public List<RoomListItemResponse> getRooms() {
-        // 방 목록(DB) + 참여자 수(Redis ZCARD) + 현재 videoId(Redis) + 방장 프로필 이미지(S3 presigned)
+        // 방 목록 + 방장 프로필 key는 findRoomsForList() 한 번의 join으로 가져온다(N+1 제거).
+        // 참여자 수(Redis ZCARD) · 현재 videoId(Redis) · 프로필 key→presigned URL 변환만 방마다 별도로 채운다.
         return roomRepository.findRoomsForList().stream()
                 .map(room -> {
                     long participantCount = participantRedis.count(room.getRoomId());
                     String videoId = videoStateService.getVideoId(room.getRoomId());
-                    String hostImageUrl = userProfileRepository.findProfileImageKeyByUserId(room.getHostUserId())
-                            .filter(key -> !key.isBlank())
-                            .map(s3StorageService::createPresignedGetUrl)
-                            .orElse(null);
+                    String rawImageKey = room.getHostProfileImageUrl();
+                    String hostImageUrl = (rawImageKey == null || rawImageKey.isBlank())
+                            ? null
+                            : s3StorageService.createPresignedGetUrl(rawImageKey);
                     return room.withParticipantCount(participantCount)
                             .withVideoId(videoId)
                             .withHostProfileImageUrl(hostImageUrl);
